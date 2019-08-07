@@ -1,1 +1,1 @@
-This is the first git demo fie
+This is the first git demo file using git bash.
