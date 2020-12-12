@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>FinalReport.html</h1>
+    <p>Report generated on 19-Jul-2019 at 23:34:56 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v1.21.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk1.8.0_192\</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;5.0.1&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.12.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.17763-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;forked&apos;: &apos;1.0.2&apos;, &apos;html&apos;: &apos;1.21.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;xdist&apos;: &apos;1.29.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.2</td></tr></table>
+    <h2>Summary</h2>
+    <p>45 tests ran in 989.95 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">45 passed</span>, <input checked="true" class="filter" data-test-result="skipped" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">5 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="skipped results-table-row">
+        <tr>
+          <td class="col-result">Skipped</td>
+          <td class="col-name">tests/HomePage/cancel_test.py::test_valid_credential::setup</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">(&#x27;tests\\HomePage\\cancel_test.py&#x27;, 67, &#x27;Skipped: unconditional skip&#x27;)<br/></div></td></tr></tbody>
+      <tbody class="skipped results-table-row">
+        <tr>
+          <td class="col-result">Skipped</td>
+          <td class="col-name">tests/HomePage/email_test.py::test_valid_credential::setup</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">(&#x27;tests\\HomePage\\email_test.py&#x27;, 67, &#x27;Skipped: unconditional skip&#x27;)<br/></div></td></tr></tbody>
+      <tbody class="skipped results-table-row">
+        <tr>
+          <td class="col-result">Skipped</td>
+          <td class="col-name">tests/HomePage/print_test.py::test_valid_credential::setup</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">(&#x27;tests\\HomePage\\print_test.py&#x27;, 64, &#x27;Skipped: unconditional skip&#x27;)<br/></div></td></tr></tbody>
+      <tbody class="skipped results-table-row">
+        <tr>
+          <td class="col-result">Skipped</td>
+          <td class="col-name">tests/HomePage/refund_test.py::test_valid_credential::setup</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">(&#x27;tests\\HomePage\\refund_test.py&#x27;, 63, &#x27;Skipped: unconditional skip&#x27;)<br/></div></td></tr></tbody>
+      <tbody class="skipped results-table-row">
+        <tr>
+          <td class="col-result">Skipped</td>
+          <td class="col-name">tests/HomePage/reschedule_test.py::test_valid_credential::setup</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">(&#x27;tests\\HomePage\\reschedule_test.py&#x27;, 24, &#x27;Skipped: unconditional skip&#x27;)<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/BusHire/home_test.py::test_verify_home_page</td>
+          <td class="col-duration">7.21</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:13 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:14 Bus hiring page validation for the home page
+[32mINFO    [0m &lt;module&gt;:home_test.py:15 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Travelling Together Is Easy&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:155 Element is displayed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/BusHire/home_test.py::test_bus_hire</td>
+          <td class="col-duration">25.15</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:28 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:29 Bus Hiring with valid input
+[32mINFO    [0m &lt;module&gt;:home_test.py:30 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:82 Element found with locator: //button[@id=&#x27;hire_btn&#x27;] and  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator: //button[@id=&#x27;hire_btn&#x27;] locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:82 Element found with locator: //div[@class=&#x27;Hire-a-vehicle&#x27;] and  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:155 Element is displayed
+[32mINFO    [0m Bushire:selenium_wrapper.py:85 Element not found with locator: //span[contains(text(),&#x27;Travelling Together Is Easy&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:157 Element not displayed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/BusHire/home_test.py::test_empty_start_point</td>
+          <td class="col-duration">29.70</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:46 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:47 Bus hiring with validation with empty start point
+[32mINFO    [0m &lt;module&gt;:home_test.py:48 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:179 Element not appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:103 Cannot click on the element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:82 Element found with locator: //button[@id=&#x27;hire_btn&#x27;] and  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator: //button[@id=&#x27;hire_btn&#x27;] locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:85 Element not found with locator: //div[@class=&#x27;Hire-a-vehicle&#x27;] and  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:157 Element not displayed
+[32mINFO    [0m Bushire:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Travelling Together Is Easy&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:155 Element is displayed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/BusHire/home_test.py::test_empty_end_point</td>
+          <td class="col-duration">29.98</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:63 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:64 Bus hiring with validation with empty end point
+[32mINFO    [0m &lt;module&gt;:home_test.py:65 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:179 Element not appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:103 Cannot click on the element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:82 Element found with locator: //button[@id=&#x27;hire_btn&#x27;] and  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator: //button[@id=&#x27;hire_btn&#x27;] locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:85 Element not found with locator: //div[@class=&#x27;Hire-a-vehicle&#x27;] and  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:157 Element not displayed
+[32mINFO    [0m Bushire:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Travelling Together Is Easy&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:155 Element is displayed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/BusHire/home_test.py::test_all_fields_empty</td>
+          <td class="col-duration">8.84</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:80 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:81 Bus hiring with all empty input field
+[32mINFO    [0m &lt;module&gt;:home_test.py:82 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Bushire:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Bushire:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Travelling Together Is Easy&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Bushire:selenium_wrapper.py:155 Element is displayed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/cancel_test.py::test_cancel_invalid_credential</td>
+          <td class="col-duration">8.27</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:cancel_test.py:14 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:cancel_test.py:15 Cancel page test with invalid credential
+[32mINFO    [0m &lt;module&gt;:cancel_test.py:16 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:82 Element found with locator: //header[@id=&#x27;rh_header&#x27;]//ul[1]//li[2]//span[1]//span[1] and  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator: //header[@id=&#x27;rh_header&#x27;]//ul[1]//li[2]//span[1]//span[1] locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/cancel_test.py::test_cancel_empty_ticket</td>
+          <td class="col-duration">8.07</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:cancel_test.py:28 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:cancel_test.py:29 Cancel page test with empty ticket
+[32mINFO    [0m &lt;module&gt;:cancel_test.py:30 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:82 Element found with locator: //header[@id=&#x27;rh_header&#x27;]//ul[1]//li[2]//span[1]//span[1] and  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator: //header[@id=&#x27;rh_header&#x27;]//ul[1]//li[2]//span[1]//span[1] locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/cancel_test.py::test_cancel_empty_email</td>
+          <td class="col-duration">8.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:cancel_test.py:42 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:cancel_test.py:43 Cancel page test with empty email
+[32mINFO    [0m &lt;module&gt;:cancel_test.py:44 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:82 Element found with locator: //header[@id=&#x27;rh_header&#x27;]//ul[1]//li[2]//span[1]//span[1] and  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator: //header[@id=&#x27;rh_header&#x27;]//ul[1]//li[2]//span[1]//span[1] locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/cancel_test.py::test_cancel_empty_credential</td>
+          <td class="col-duration">8.03</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:cancel_test.py:56 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:cancel_test.py:57 Cancel page test with empty both the field
+[32mINFO    [0m &lt;module&gt;:cancel_test.py:58 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:82 Element found with locator: //header[@id=&#x27;rh_header&#x27;]//ul[1]//li[2]//span[1]//span[1] and  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator: //header[@id=&#x27;rh_header&#x27;]//ul[1]//li[2]//span[1]//span[1] locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/email_test.py::test_invalid_credential</td>
+          <td class="col-duration">9.07</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:email_test.py:14 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:email_test.py:15 test with invalid ticket credentials
+[32mINFO    [0m &lt;module&gt;:email_test.py:16 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Email/SMS&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Email/SMS&#x27;)] locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/email_test.py::test_empty_ticket</td>
+          <td class="col-duration">8.61</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:email_test.py:29 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:email_test.py:30 test with empty ticket number
+[32mINFO    [0m &lt;module&gt;:email_test.py:31 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Email/SMS&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Email/SMS&#x27;)] locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/email_test.py::test_empty_email</td>
+          <td class="col-duration">8.64</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:email_test.py:43 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:email_test.py:44 test with empty email
+[32mINFO    [0m &lt;module&gt;:email_test.py:45 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Email/SMS&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Email/SMS&#x27;)] locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/email_test.py::test_empty_credentials</td>
+          <td class="col-duration">9.32</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:email_test.py:57 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:email_test.py:58 test with empty credredentials
+[32mINFO    [0m &lt;module&gt;:email_test.py:59 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Email/SMS&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Email/SMS&#x27;)] locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Emailpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Emailpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] and  locatorType: xpath
+[32mINFO    [0m Emailpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_booking_with_valid_credentials</td>
+          <td class="col-duration">10.34</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:16 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:17 test_busbooking with valid credentials started
+[32mINFO    [0m &lt;module&gt;:home_test.py:18 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;src&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:116 Sent data on element with locator: //input[@id=&#x27;src&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;dest&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:116 Sent data on element with locator: //input[@id=&#x27;dest&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //button[@id=&#x27;search_btn&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator: //button[@id=&#x27;search_btn&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //div[@class=&#x27;onward-modify-btn g-button clearfix fl&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:134 Element present with locator: //div[@class=&#x27;onward-modify-btn g-button clearfix fl&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_bus_booking_invalid_field1</td>
+          <td class="col-duration">98.88</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:32 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:33 test bus booking started with both source and destination field empty
+[32mINFO    [0m &lt;module&gt;:home_test.py:34 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;src&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:116 Sent data on element with locator: //input[@id=&#x27;src&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;dest&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:116 Sent data on element with locator: //input[@id=&#x27;dest&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //button[@id=&#x27;search_btn&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator: //button[@id=&#x27;search_btn&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_busbooking_invalid_field2</td>
+          <td class="col-duration">9.45</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:46 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:47 test bus booking started  destination field empty
+[32mINFO    [0m &lt;module&gt;:home_test.py:48 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;src&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:116 Sent data on element with locator: //input[@id=&#x27;src&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;dest&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:116 Sent data on element with locator: //input[@id=&#x27;dest&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //button[@id=&#x27;search_btn&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator: //button[@id=&#x27;search_btn&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_busbooking_invalid_field3</td>
+          <td class="col-duration">9.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:62 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:63 test_busbooking started with  source  field empty
+[32mINFO    [0m &lt;module&gt;:home_test.py:64 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;src&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:116 Sent data on element with locator: //input[@id=&#x27;src&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;dest&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:116 Sent data on element with locator: //input[@id=&#x27;dest&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //button[@id=&#x27;search_btn&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator: //button[@id=&#x27;search_btn&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_cancel_page</td>
+          <td class="col-duration">8.20</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:77 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:78 test_busbooking started with both source and destination field empty
+[32mINFO    [0m &lt;module&gt;:home_test.py:79 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:82 Element found with locator: //header[@id=&#x27;rh_header&#x27;]//ul[1]//li[2]//span[1]//span[1] and  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator: //header[@id=&#x27;rh_header&#x27;]//ul[1]//li[2]//span[1]//span[1] locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Cancelpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_red_pool</td>
+          <td class="col-duration">3.56</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:91 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:92 testing pool link
+[32mINFO    [0m &lt;module&gt;:home_test.py:93 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_help_page</td>
+          <td class="col-duration">8.23</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:105 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:106 testing pool help page
+[32mINFO    [0m &lt;module&gt;:home_test.py:107 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_login_page</td>
+          <td class="col-duration">7.95</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:119 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:120 Login Setup
+[32mINFO    [0m &lt;module&gt;:home_test.py:121 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //div[@id=&#x27;hc&#x27;]//ul[@class=&#x27;config-list&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator: //div[@id=&#x27;hc&#x27;]//ul[@class=&#x27;config-list&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:85 Element not found with locator: ///div[@class=&#x27;modal&#x27;]//i[@class=&#x27;icon-close&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:157 Element not displayed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_sms_valid_number</td>
+          <td class="col-duration">2.43</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:133 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:134 Sms testing
+[32mINFO    [0m &lt;module&gt;:home_test.py:135 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;sendLinkButton&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;sendLinkButton&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //div[@id=&#x27;success&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:134 Element present with locator: //div[@id=&#x27;success&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_sms_valid_invalid_number</td>
+          <td class="col-duration">2.33</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:148 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:149 invalid sms testing
+[32mINFO    [0m &lt;module&gt;:home_test.py:150 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;sendLinkButton&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;sendLinkButton&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //span[@class=&#x27;errorMessage&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:134 Element present with locator: //span[@class=&#x27;errorMessage&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_sms_valid_empty_number</td>
+          <td class="col-duration">2.25</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:162 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:163 Login Setup
+[32mINFO    [0m &lt;module&gt;:home_test.py:164 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;sendLinkButton&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;sendLinkButton&#x27;] locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //span[@class=&#x27;errorMessage&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:134 Element present with locator: //span[@class=&#x27;errorMessage&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_app_store_page</td>
+          <td class="col-duration">8.93</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:177 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:178 Testing for app store page
+[32mINFO    [0m &lt;module&gt;:home_test.py:179 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_android_page</td>
+          <td class="col-duration">8.90</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:192 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:193 Testing for android page
+[32mINFO    [0m &lt;module&gt;:home_test.py:194 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/home_test.py::test_verification_page</td>
+          <td class="col-duration">3.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:206 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:207 Login 
+[32mINFO    [0m &lt;module&gt;:home_test.py:208 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:82 Element found with locator: //a[@class=&#x27;redbus-logo home-redirect&#x27;] and  locatorType: xpath
+[32mINFO    [0m ResBusHomePage:selenium_wrapper.py:100 Clicked on element with locator: //a[@class=&#x27;redbus-logo home-redirect&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/print_test.py::test_invalid_credential</td>
+          <td class="col-duration">8.61</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:print_test.py:12 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:print_test.py:13 test with invalid credential
+[32mINFO    [0m &lt;module&gt;:print_test.py:14 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Print/Download&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Print/Download&#x27;)] locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/print_test.py::test_empty_ticket</td>
+          <td class="col-duration">10.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:print_test.py:26 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:print_test.py:27 test with empty ticket number
+[32mINFO    [0m &lt;module&gt;:print_test.py:28 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Print/Download&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Print/Download&#x27;)] locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/print_test.py::test_empty_email</td>
+          <td class="col-duration">8.73</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:print_test.py:40 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:print_test.py:41 test with empty email
+[32mINFO    [0m &lt;module&gt;:print_test.py:42 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Print/Download&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Print/Download&#x27;)] locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/print_test.py::test_empty_credentials</td>
+          <td class="col-duration">9.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:print_test.py:54 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:print_test.py:55 test with empty credredentials
+[32mINFO    [0m &lt;module&gt;:print_test.py:56 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Print/Download&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Print/Download&#x27;)] locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Printpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Printpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] and  locatorType: xpath
+[32mINFO    [0m Printpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;mBWrapper&#x27;]/div/div[1]/div/div[1] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/refund_test.py::test_invalid_credential</td>
+          <td class="col-duration">7.36</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:refund_test.py:12 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:refund_test.py:13 test with invalid credential
+[32mINFO    [0m &lt;module&gt;:refund_test.py:14 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Cancel/Refund&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Cancel/Refund&#x27;)] locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;search_btn&#x27;] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;search_btn&#x27;] locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;cancellationheader&#x27;] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;cancellationheader&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/refund_test.py::test_empty_ticket</td>
+          <td class="col-duration">7.33</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:refund_test.py:25 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:refund_test.py:26 test with empty ticket number
+[32mINFO    [0m &lt;module&gt;:refund_test.py:27 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Cancel/Refund&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Cancel/Refund&#x27;)] locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;search_btn&#x27;] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;search_btn&#x27;] locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;cancellationheader&#x27;] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;cancellationheader&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/refund_test.py::test_empty_email</td>
+          <td class="col-duration">7.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:refund_test.py:39 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:refund_test.py:40 test with empty email
+[32mINFO    [0m &lt;module&gt;:refund_test.py:41 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Cancel/Refund&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Cancel/Refund&#x27;)] locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;search_btn&#x27;] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;search_btn&#x27;] locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;cancellationheader&#x27;] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;cancellationheader&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/refund_test.py::test_both_credentials</td>
+          <td class="col-duration">7.30</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:refund_test.py:53 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:refund_test.py:54 test with empty credredentials
+[32mINFO    [0m &lt;module&gt;:refund_test.py:55 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Cancel/Refund&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Cancel/Refund&#x27;)] locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Refundpage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Refundpage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;search_btn&#x27;] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;search_btn&#x27;] locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;cancellationheader&#x27;] and  locatorType: xpath
+[32mINFO    [0m Refundpage:selenium_wrapper.py:134 Element present with locator: //*[@id=&#x27;cancellationheader&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HomePage/reschedule_test.py::test_cancel_invalid_credential</td>
+          <td class="col-duration">8.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:reschedule_test.py:14 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:reschedule_test.py:15 Cancel page test with invalid credential
+[32mINFO    [0m &lt;module&gt;:reschedule_test.py:16 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:82 Element found with locator: //span[contains(text(),&#x27;Reschedule&#x27;)] and  locatorType: xpath
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:100 Clicked on element with locator: //span[contains(text(),&#x27;Reschedule&#x27;)] locatorType: xpath
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;ticketSearch&#x27;] and  locatorType: xpath
+[32mINFO    [0m Reschedulepage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;ticketSearch&#x27;] locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HotelPage/hotel_home_test.py::test_booking_hotel</td>
+          <td class="col-duration">18.95</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:13 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:14 Hotel booking functionality with valid credentials
+[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:15 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;checkin_date&#x27;] and  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;checkin_date&#x27;] locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;checkout_date&#x27;] and  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:100 Clicked on element with locator: //input[@id=&#x27;checkout_date&#x27;] locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:155 Element is displayed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HotelPage/hotel_home_test.py::test_invalid_hotel</td>
+          <td class="col-duration">10.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:33 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:34 Checking Hotel booking fuctionality with invalid hotel name
+[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:35 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HotelPage/hotel_home_test.py::test_empty_hotel_field</td>
+          <td class="col-duration">9.45</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:48 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:49 Checking the Hotel booking fuctionality with empty Hotel field
+[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:50 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HotelPage/hotel_home_test.py::test_varify_page</td>
+          <td class="col-duration">10.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:63 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:64 Verifying the Hotel Home Page
+[32mINFO    [0m &lt;module&gt;:hotel_home_test.py:65 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m HotelPage:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m HotelPage:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m HotelPage:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;search_key&#x27;] and  locatorType: xpath
+[32mINFO    [0m HotelPage:selenium_wrapper.py:155 Element is displayed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HotelPage/more_hotel_test.py::test_top_hotel</td>
+          <td class="col-duration">15.12</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:more_hotel_test.py:13 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:more_hotel_test.py:14 Checking the top hotel present in the list
+[32mINFO    [0m &lt;module&gt;:more_hotel_test.py:15 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/HotelPage/more_hotel_test.py::test_offer_page</td>
+          <td class="col-duration">10.58</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:more_hotel_test.py:29 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:more_hotel_test.py:30 Checking for the Offer Page
+[32mINFO    [0m &lt;module&gt;:more_hotel_test.py:31 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:82 Element found with locator: //*[@id=&#x27;home-page&#x27;]/section[2]/aside/div[1]/a and  locatorType: xpath
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:100 Clicked on element with locator: //*[@id=&#x27;home-page&#x27;]/section[2]/aside/div[1]/a locatorType: xpath
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m MoreHotel:selenium_wrapper.py:155 Element is displayed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/Pilgrimages/home_test.py::test_valid_credentials</td>
+          <td class="col-duration">16.42</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:13 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:14 Checking the functionality of Pilgrimage page with valid input field
+[32mINFO    [0m &lt;module&gt;:home_test.py:15 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:116 Sent data on element with locator:  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:82 Element found with locator: //input[@id=&#x27;dest_city&#x27;] and  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:116 Sent data on element with locator: //input[@id=&#x27;dest_city&#x27;] locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:82 Element found with locator: //button[@id=&#x27;search_packages&#x27;] and  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:100 Clicked on element with locator: //button[@id=&#x27;search_packages&#x27;] locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:85 Element not found with locator: //h1[@class=&#x27;head fade-in&#x27;] and  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:157 Element not displayed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/Pilgrimages/home_test.py::test_verify_home_page</td>
+          <td class="col-duration">4.28</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:29 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:30 Checking the functionality of Pilgrimage page with invalid input field
+[32mINFO    [0m &lt;module&gt;:home_test.py:31 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:82 Element found with locator: //h1[@class=&#x27;head fade-in&#x27;] and  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:155 Element is displayed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/Pilgrimages/home_test.py::test_empty_end_start_point</td>
+          <td class="col-duration">7.79</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m &lt;module&gt;:home_test.py:44 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m &lt;module&gt;:home_test.py:45 Checking the functionality of Pilgrimage page with invalid input field
+[32mINFO    [0m &lt;module&gt;:home_test.py:46 *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:170 Waiting for maximum :: 10 :: seconds for element to be clickable
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:177 Element appeared on the web page
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:100 Clicked on element with locator:  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:82 Element found with locator: //button[@id=&#x27;search_packages&#x27;] and  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:100 Clicked on element with locator: //button[@id=&#x27;search_packages&#x27;] locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:82 Element found with locator: //h1[@class=&#x27;head fade-in&#x27;] and  locatorType: xpath
+[32mINFO    [0m Pilgrimages:selenium_wrapper.py:155 Element is displayed</div></td></tr></tbody></table></body></html>
